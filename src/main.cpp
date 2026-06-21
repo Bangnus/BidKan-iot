@@ -1,54 +1,104 @@
-#include <Arduino.h>
+#define TINY_GSM_MODEM_A7670
+#define TINY_GSM_RX_BUFFER 1024
 
-// กำหนดขาอุปกรณ์ตามที่เราเสียบสายไฟกันไว้
-const int RELAY_PIN = 5;       // ขา Relay (จำลองสวิตช์กุญแจ)
-const int ONBOARD_LED = 2;     // ขา LED บนบอร์ด
-const int BUZZER_PIN = 4;      // ขา Buzzer (เสียงแตร)
-const int BATTERY_PIN = 34;    // ขา Analog รับค่าโวลลุ่มจำลองแบต
+#include <TinyGsmClient.h>
+#include <PubSubClient.h>
+
+// --- ขาเชื่อมต่อของ LilyGO T-A7670SA และอุปกรณ์ ---
+#define MODEM_RX 26
+#define MODEM_TX 27
+#define MODEM_PWRKEY 4
+const int RELAY_PIN = 12;
+const int BATTERY_PIN = 32;
+
+// --- ตั้งค่าซิมและ MQTT ---
+const char apn[] = "internet"; // เปลี่ยนตามค่ายซิมถ้าจำเป็น
+const char* mqtt_server = "YOUR_DROPLET_IP";
+const int   mqtt_port = 1883;
+
+const char* topic_publish = "bidkan/bikes/BIKE-001/gps";
+const char* topic_subscribe = "bidkan/bikes/BIKE-001/command";
+
+HardwareSerial SerialAT(1);
+TinyGsm modem(SerialAT);
+TinyGsmClient client(modem);
+PubSubClient mqtt(client);
+
+// ฟังก์ชันทำงานเมื่อเซิร์ฟเวอร์สั่งปลดล็อก
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  String message;
+  for (int i = 0; i < length; i++) {
+    message += (char)payload[i];
+  }
+  Serial.println("📩 [4G] ได้รับคำสั่ง: " + message);
+
+  if (message == "UNLOCK") {
+    Serial.println("🔓 ปลดล็อกรถ!");
+    digitalWrite(RELAY_PIN, HIGH);
+    // ในสถานการณ์จริง อาจจะปลดล็อกจนกว่าลูกค้าจะกดยืนยันคืนรถ
+    delay(5000); 
+    digitalWrite(RELAY_PIN, LOW);
+    Serial.println("🔒 ล็อกรถ");
+  }
+}
 
 void setup() {
   Serial.begin(115200);
-  
-  // ตั้งค่าขาที่เป็น "ตัวสั่งงาน" (OUTPUT)
   pinMode(RELAY_PIN, OUTPUT);
-  pinMode(ONBOARD_LED, OUTPUT);
-  pinMode(BUZZER_PIN, OUTPUT);
+  digitalWrite(RELAY_PIN, LOW);
+  analogReadResolution(12);
+
+  // ปลุกโมดูล 4G
+  pinMode(MODEM_PWRKEY, OUTPUT);
+  digitalWrite(MODEM_PWRKEY, HIGH); delay(100);
+  digitalWrite(MODEM_PWRKEY, LOW);  delay(1000);
+  digitalWrite(MODEM_PWRKEY, HIGH);
+
+  SerialAT.begin(115200, SERIAL_8N1, MODEM_RX, MODEM_TX);
+  delay(3000);
+
+  Serial.println("สตาร์ท 4G และเชื่อมต่ออินเทอร์เน็ต...");
+  modem.restart();
+  if (!modem.gprsConnect(apn, "", "")) {
+    Serial.println("❌ ต่อเน็ตไม่สำเร็จ");
+    while(true);
+  }
   
-  // ตั้งค่าขาที่เป็น "ตัวรับข้อมูล" (INPUT)
-  pinMode(BATTERY_PIN, INPUT);
-  
-  Serial.println("=== เริ่มการทดสอบฮาร์ดแวร์ (Offline Mode) ===");
+  modem.enableGPS();
+  Serial.println("✅ 4G พร้อม! GPS พร้อม!");
+
+  mqtt.setServer(mqtt_server, mqtt_port);
+  mqtt.setCallback(mqttCallback);
+}
+
+void reconnect() {
+  while (!mqtt.connected()) {
+    Serial.print("Connecting MQTT...");
+    if (mqtt.connect("BIKE_001_PROD")) {
+      Serial.println(" ✅");
+      mqtt.subscribe(topic_subscribe);
+    } else {
+      delay(5000);
+    }
+  }
 }
 
 void loop() {
-  // --- ส่วนที่ 1: ทดสอบอ่านค่าแบตเตอรี่ ---
-  int analogValue = analogRead(BATTERY_PIN); 
-  // แปลงค่าจาก 0-4095 (ของ ESP32) ให้เป็น 0-100%
-  int batteryPercent = map(analogValue, 0, 4095, 0, 100); 
-  
-  Serial.print("🔋 ระดับแบตเตอรี่จำลอง: ");
-  Serial.print(batteryPercent);
-  Serial.println("%");
-  // delay(1000);
+  if (!mqtt.connected()) reconnect();
+  mqtt.loop();
 
-  // --- ส่วนที่ 2: สั่งปลดล็อกรถ (เปิด Relay) ---
-  digitalWrite(RELAY_PIN, HIGH);
-  digitalWrite(ONBOARD_LED, HIGH);
-  
-  // // สั่ง Buzzer ดัง "ติ๊ด!" สั้นๆ 1 ครั้ง เพื่อจำลองเสียงตอนปลดล็อก
-  digitalWrite(BUZZER_PIN, HIGH);
-  delay(100); 
-  digitalWrite(BUZZER_PIN, LOW);
-  
-  Serial.println("🟢 สถานะ: ปลดล็อก (Relay ON)");
-  delay(5000); 
-  // รอไป 5 วินาที
+  float lat = 0, lon = 0;
+  int rawBat = analogRead(BATTERY_PIN);
+  int batPercent = map(rawBat, 0, 4095, 0, 100);
 
-  // --- ส่วนที่ 3: สั่งล็อกรถ (ปิด Relay) ---
-  digitalWrite(RELAY_PIN, LOW);
-  digitalWrite(ONBOARD_LED, LOW);
-  Serial.println("🔴 สถานะ: ล็อกรถ (Relay OFF)");
-  Serial.println("--------------------------------");
-  delay(5000); 
-  // รอ 5 วินาที แล้ววนลูปใหม่
+  // ดึงพิกัดจริงจากดาวเทียม
+  if (modem.getGPS(&lat, &lon)) {
+    String payload = "{\"lat\":" + String(lat, 6) + ", \"lon\":" + String(lon, 6) + ", \"battery\":" + String(batPercent) + "}";
+    mqtt.publish(topic_publish, payload.c_str());
+    Serial.println("🚀 [PROD] ส่งข้อมูล: " + payload);
+  } else {
+    Serial.println("⏳ รอสัญญาณ GPS...");
+  }
+
+  delay(5000);
 }
