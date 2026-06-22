@@ -1,41 +1,35 @@
 #include <Arduino.h>
 
 // --- กำหนดขาอุปกรณ์ ---
-const int RELAY_PIN = 12;   // ขาสัญญาณควบคุมรีเลย์ (ล็อก/ปลดล็อก)
-const int BATTERY_PIN = 32; // ขา Analog (ADC) สำหรับวัดแรงดันแบตเตอรี่
+const int RELAY_IGNITION_PIN = 12; // Relay 1: สวิตช์กุญแจ (จ่ายไฟให้รถ)
+const int RELAY_LOCK_PIN = 14;     // Relay 2: สั่งล็อกล้อ (ต่อตรง Controller)
+const int BATTERY_PIN = 32;        // ขาวัดแบตเตอรี่ (วงจร 20K & 1K)
 
 void setup() {
   Serial.begin(115200);
   delay(10);
   
-  // ตั้งค่าขารีเลย์เป็นไฟออก (OUTPUT) และให้เริ่มต้นที่สถานะ ล็อกรถ (LOW)
-  pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, LOW); 
+  // 1. ตั้งค่าขารีเลย์เป็น OUTPUT
+  pinMode(RELAY_IGNITION_PIN, OUTPUT);
+  pinMode(RELAY_LOCK_PIN, OUTPUT);
   
-  // ตั้งค่าความละเอียด ADC ของ ESP32 เป็น 12-bit
+  // 2. 🔒 สถานะเริ่มต้นตอนเสียบไฟ: รถจอดล็อกอยู่
+  digitalWrite(RELAY_IGNITION_PIN, LOW); // ดับเครื่อง (กุญแจ OFF)
+  digitalWrite(RELAY_LOCK_PIN, HIGH);    // สั่งล็อกล้อค้างไว้ (เชื่อมสัญญาณลง GND)
+  
+  // 3. ตั้งค่าการอ่านแบตเตอรี่
   analogReadResolution(12);
   
-  Serial.println("\n--- เริ่มระบบทดสอบรวมร่าง (Relay + แบตเตอรี่ สูตร 20K & 1K) ---");
+  Serial.println("\n--- เริ่มระบบ: แบบ B (ต่อตรงล็อกล้อ) + กุญแจ + วัดแบต ---");
 }
 
-// --- ฟังก์ชันสำหรับอ่านและคำนวณแบตเตอรี่ ---
 void checkBattery() {
-  // 1. อ่านค่าดิบจากขา 32
   int rawValue = analogRead(BATTERY_PIN);
-  
-  // 2. แปลงค่าดิบ (2304 ถึง 3226) ให้เป็น 0% ถึง 100% ตามสูตร R1=20K, R2=1K
   int batteryPercent = map(rawValue, 2304, 3226, 0, 100);
 
-  // 3. ป้องกันค่าเปอร์เซ็นต์หลุดกรอบ (เวลาไฟกระชาก)
-  if (batteryPercent > 100) {
-    batteryPercent = 100;
-  } else if (batteryPercent < 0) {
-    batteryPercent = 0;
-  }
+  if (batteryPercent > 100) batteryPercent = 100;
+  if (batteryPercent < 0) batteryPercent = 0;
 
-  // แสดงผล
-  Serial.print(" -> ค่าดิบ ADC: ");
-  Serial.print(rawValue);
   Serial.print(" | แบตเตอรี่เหลือ: ");
   Serial.print(batteryPercent);
   Serial.println(" %");
@@ -43,28 +37,36 @@ void checkBattery() {
 
 void loop() {
   // ==========================================
-  // จังหวะที่ 1: สั่งปลดล็อกรถ (ทำงาน 3 วินาที)
+  // เหตุการณ์ที่ 1: ลูกค้าสแกนเช่ารถ (Unlock)
   // ==========================================
-  Serial.println("\n🔓 [คำสั่ง] สั่งปลดล็อกรถ (เปิดรีเลย์)");
-  digitalWrite(RELAY_PIN, HIGH); // จ่ายไฟให้รีเลย์ (แป๊ก!)
+  Serial.println("\n🔓 [คำสั่ง] ปลดล็อกรถ...");
   
-  // อ่านค่าแบตเตอรี่ 3 ครั้ง (ครั้งละ 1 วินาที) ระหว่างที่รถปลดล็อกอยู่
-  for (int i = 0; i < 3; i++) {
-    Serial.print("[สถานะ: ปลดล็อก]");
-    checkBattery(); // เรียกใช้ฟังก์ชันอ่านแบตเตอรี่ที่เราเขียนไว้ด้านบน
-    delay(1000); 
-  }
+  // สเต็ป 1: คลายล็อกล้อก่อน
+  digitalWrite(RELAY_LOCK_PIN, LOW); // ตัดการเชื่อมต่อกราวด์ ล้อหมุนได้อิสระ
+  delay(500); // รอให้ล้อคลายตัวครึ่งวินาที
+  
+  // สเต็ป 2: เปิดระบบไฟรถ
+  digitalWrite(RELAY_IGNITION_PIN, HIGH); // จ่ายไฟกุญแจ
+  
+  Serial.print(">>> รถพร้อมขับขี่");
+  checkBattery();
+  
+  delay(5000); // จำลองลูกค้ากำลังขี่รถไป 5 วินาที
 
   // ==========================================
-  // จังหวะที่ 2: สั่งล็อกรถ (ทำงาน 3 วินาที)
+  // เหตุการณ์ที่ 2: ลูกค้ากดยืนยันคืนรถ (Lock)
   // ==========================================
-  Serial.println("\n🔒 [คำสั่ง] สั่งล็อกรถ (ปิดรีเลย์)");
-  digitalWrite(RELAY_PIN, LOW); // ตัดไฟรีเลย์ (สับกลับ!)
+  Serial.println("\n🔒 [คำสั่ง] ล็อกรถ...");
   
-  // อ่านค่าแบตเตอรี่ 3 ครั้ง (ครั้งละ 1 วินาที) ระหว่างที่รถล็อกอยู่
-  for (int i = 0; i < 3; i++) {
-    Serial.print("[สถานะ: ล็อกรถ]  ");
-    checkBattery(); 
-    delay(1000);
-  }
+  // สเต็ป 1: ดับเครื่องยนต์ก่อน
+  digitalWrite(RELAY_IGNITION_PIN, LOW); // ตัดไฟกุญแจ
+  delay(1000); // รอ 1 วินาทีให้รถดับสนิท
+  
+  // สเต็ป 2: สั่งล็อกล้อ
+  digitalWrite(RELAY_LOCK_PIN, HIGH); // ดึงสัญญาณลงกราวด์ ล้อล็อกหนืดทันที
+  
+  Serial.print(">>> รถล็อกสมบูรณ์ เข็นไม่ได้");
+  checkBattery();
+
+  delay(5000); // จำลองการจอดรอรลูกค้าคนต่อไป 5 วินาที
 }
