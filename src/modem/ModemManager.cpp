@@ -47,10 +47,21 @@ void ModemManager::powerOn() {
     digitalWrite(pwrKey, LOW);
     delay(1000);
     digitalWrite(pwrKey, HIGH);
-    delay(3000); // รอให้ชิปบูตเสร็จ
+    
+    // 3. รอให้ชิปบูตเสร็จ (เช็คซ้ำสูงสุด 10 วินาที)
+    Serial.print("[Modem] รอชิป 4G บูต.");
+    bool booted = false;
+    for (int i = 0; i < 10; i++) {
+        delay(1000);
+        Serial.print(".");
+        if (isModemReady()) {
+            booted = true;
+            break;
+        }
+    }
+    Serial.println();
 
-    // 3. เช็คอีกรอบเพื่อความมั่นใจ
-    if (isModemReady()) {
+    if (booted) {
         Serial.println("[Modem] ✅ เปิดชิป 4G สำเร็จ!");
     } else {
         Serial.println("[Modem] ⚠️ ชิป 4G ยังไม่ตอบ — อาจต้องเช็คไฟเลี้ยงหรือซิมการ์ด");
@@ -65,13 +76,10 @@ void ModemManager::powerOff() {
 bool ModemManager::begin() {
     Serial.println("[Modem] กำลังเปิดโมดูล 4G...");
 
-    // 1. Power on (จะเช็คว่าเปิดอยู่แล้วหรือยัง ก่อนกด PWRKEY)
+    // 1. Power on (จะเช็คว่าเปิดอยู่แล้วหรือยัง ก่อนกด PWRKEY และมี retry loop 10s แล้ว)
     powerOn();
 
-    // 2. รอให้ชิปพร้อม
-    delay(MODEM_BOOT_DELAY_MS);
-
-    // 3. Init modem (ผ่าน TinyGSM)
+    // 2. Init modem (ผ่าน TinyGSM)
     if (!_modem.init()) {
         Serial.println("[Modem] ❌ ไม่สามารถติดต่อโมดูล 4G ได้");
         return false;
@@ -113,7 +121,7 @@ bool ModemManager::connectGPRS() {
         }
 
         Serial.println("[Modem] ❌ ล้มเหลว รอ retry...");
-        delay(MQTT_RECONNECT_DELAY_MS);
+        delay(GPRS_RETRY_DELAY_MS);
     }
 
     Serial.println("[Modem] ❌ เชื่อมต่อ GPRS ไม่สำเร็จหลังจากลองครบแล้ว");
@@ -139,9 +147,16 @@ bool ModemManager::getGPSData(float &lat, float &lon, float &speed) {
     
     String response = "";
     if (_modem.waitResponse(10000L, "+CGNSSINFO:") == 1) {
+        // ตั้ง timeout เพื่อไม่ให้จมถ้าเกิดอ่านไม่จบ
+        _modem.stream.setTimeout(2000); 
         response = _modem.stream.readStringUntil('\n');
         _modem.waitResponse(); // consume OK
     } else {
+        return false; // Time out waiting for +CGNSSINFO
+    }
+
+    if (response.length() == 0) {
+        Serial.println("[Modem] ⚠️ GPS ตอบกลับแต่ไม่มีข้อมูล");
         return false;
     }
 
@@ -150,44 +165,49 @@ bool ModemManager::getGPSData(float &lat, float &lon, float &speed) {
 
 bool ModemManager::parseGNSSInfo(const String& response, float &lat, float &lon, float &speed) {
     // +CGNSSINFO: <mode>,<GPS-SVs>,<GLONASS-SVs>,<BEIDOU-SVs>,<lat>,<N/S>,<lon>,<E/W>,<date>,<UTC-time>,<alt>,<speed>,<course>
-    // Example: +CGNSSINFO: 3,08,04,01,1345.5678,N,10030.1234,E,150726,110000.0,25.3,0.5,180.2
-    // If no fix: +CGNSSINFO: ,,,,,,,,
+    // Example:  3,08,04,01,1345.5678,N,10030.1234,E,150726,110000.0,25.3,0.5,180.2 (Note: "+CGNSSINFO:" was already parsed out)
+    // If no fix:  ,,,,,,,,
     
     if (response.length() < 10) return false;
     
-    // Check if we have a valid fix (mode > 0)
-    int firstComma = response.indexOf(',');
-    if (firstComma < 0) return false;
-    
-    String mode = response.substring(0, firstComma);
-    mode.trim();
-    if (mode.length() == 0 || mode.toInt() == 0) return false;
-    
-    // Parse: skip mode, GPS-SVs, GLONASS-SVs, BEIDOU-SVs to get lat
-    int commaCount = 0;
-    int pos = 0;
-    String fields[13];
-    int fieldIndex = 0;
-    
-    for (int i = 0; i <= (int)response.length() && fieldIndex < 13; i++) {
-        if (i == (int)response.length() || response[i] == ',') {
-            fields[fieldIndex] = response.substring(pos, i);
-            fields[fieldIndex].trim();
-            fieldIndex++;
-            pos = i + 1;
+    // Helper lambda to get nth comma-separated value
+    auto getField = [](const String& str, int index) -> String {
+        int commaCount = 0;
+        int startIndex = 0;
+        for (int i = 0; i < str.length(); i++) {
+            if (str[i] == ',') {
+                if (commaCount == index) {
+                    String val = str.substring(startIndex, i);
+                    val.trim();
+                    return val;
+                }
+                commaCount++;
+                startIndex = i + 1;
+            }
         }
+        // Handle last field
+        if (commaCount == index) {
+            String val = str.substring(startIndex);
+            val.trim();
+            return val;
+        }
+        return "";
+    };
+    
+    String modeStr = getField(response, 0);
+    if (modeStr.length() == 0 || modeStr.toInt() == 0) {
+        return false; // No fix yet
     }
     
-    if (fieldIndex < 8) return false;
+    // fields: [0]mode, [1]GPS, [2]GLONASS, [3]BEIDOU, [4]lat, [5]N/S, [6]lon, [7]E/W, ... [11]speed
+    String latStr = getField(response, 4);
+    String latDir = getField(response, 5);
+    String lonStr = getField(response, 6);
+    String lonDir = getField(response, 7);
     
-    // fields[4] = lat (DDMM.MMMM), fields[5] = N/S
-    // fields[6] = lon (DDDMM.MMMM), fields[7] = E/W
-    String latStr = fields[4];
-    String latDir = fields[5];
-    String lonStr = fields[6];
-    String lonDir = fields[7];
-    
-    if (latStr.length() == 0 || lonStr.length() == 0) return false;
+    if (latStr.length() == 0 || lonStr.length() == 0) {
+        return false;
+    }
     
     // Convert DDMM.MMMM to decimal degrees
     float latRaw = latStr.toFloat();
@@ -202,10 +222,11 @@ bool ModemManager::parseGNSSInfo(const String& response, float &lat, float &lon,
     lon = lonDeg + (lonMin / 60.0f);
     if (lonDir == "W") lon = -lon;
     
-    // Parse speed (fields[11]) if available
+    // Parse speed
+    String speedStr = getField(response, 11);
     speed = 0;
-    if (fieldIndex > 11 && fields[11].length() > 0) {
-        speed = fields[11].toFloat();
+    if (speedStr.length() > 0) {
+        speed = speedStr.toFloat();
     }
     
     return true;

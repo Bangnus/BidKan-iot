@@ -31,6 +31,7 @@
 // --- Timing Intervals (ms & sec) ---
 #define GPS_REPORT_INTERVAL_MS   15000   // ส่งพิกัดทุก 15 วินาที
 #define MQTT_RECONNECT_DELAY_MS  5000    // รอ 5 วิก่อน retry MQTT
+#define GPRS_RETRY_DELAY_MS      5000    // รอ 5 วิก่อน retry GPRS
 #define GPRS_CONNECT_MAX_RETRIES 5       // ลอง connect GPRS สูงสุด 5 ครั้ง
 #define MODEM_BOOT_DELAY_MS      5000    // รอโมดูลบูต
 #define WDT_TIMEOUT_SECONDS      30      // Watchdog timeout 30 วินาที
