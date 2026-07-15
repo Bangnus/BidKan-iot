@@ -1,18 +1,43 @@
-// 1. อ่านค่าดิบจากขา 32
-  int rawValue = analogRead(BATTERY_PIN);
-  
-  // 2. แปลงค่าดิบ (2304 ถึง 3226) ให้เป็น 0% ถึง 100%
-  int batteryPercent = map(rawValue, 2304, 3226, 0, 100);
+#include <Arduino.h>
+#include "pins.h"
+#include "config.h"
 
-  // 3. ป้องกันค่าหลุดกรอบ (เช่น จังหวะเบรกหรือบิดคันเร่งแรงๆ ไฟอาจจะแกว่ง)
-  if (batteryPercent > 100) {
-    batteryPercent = 100;
-  } else if (batteryPercent < 0) {
-    batteryPercent = 0;
-  }
+// =============================================
+// Test: อ่านค่า ADC แบตเตอรี่
+// Flash: pio run -e test_adc -t upload
+// =============================================
 
-  Serial.print("ค่าดิบ ADC: ");
-  Serial.print(rawValue);
-  Serial.print(" | แบตเตอรี่รถเหลือ: ");
-  Serial.print(batteryPercent);
-  Serial.println(" %");
+void setup() {
+    Serial.begin(SERIAL_BAUD);
+    delay(100);
+
+    analogReadResolution(12);
+    pinMode(BATTERY_ADC_PIN, INPUT);
+
+    Serial.println("\n--- เริ่มทดสอบ ADC แบตเตอรี่ ---");
+    Serial.print("Pin: ");
+    Serial.println(BATTERY_ADC_PIN);
+    Serial.print("Range: ");
+    Serial.print(BATTERY_ADC_MIN);
+    Serial.print(" - ");
+    Serial.println(BATTERY_ADC_MAX);
+}
+
+void loop() {
+    int rawValue = analogRead(BATTERY_ADC_PIN);
+
+    // แปลงค่าดิบด้วย calibrated range
+    int batteryPercent = map(rawValue, BATTERY_ADC_MIN, BATTERY_ADC_MAX, 0, 100);
+
+    // Clamp 0-100
+    if (batteryPercent > 100) batteryPercent = 100;
+    if (batteryPercent < 0)   batteryPercent = 0;
+
+    Serial.print("ADC Raw: ");
+    Serial.print(rawValue);
+    Serial.print(" | แบตเตอรี่: ");
+    Serial.print(batteryPercent);
+    Serial.println(" %");
+
+    delay(2000);
+}

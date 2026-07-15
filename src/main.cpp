@@ -1,104 +1,137 @@
-#define TINY_GSM_MODEM_A7670
-#define TINY_GSM_RX_BUFFER 1024
+// =============================================
+// BidKan IoT — Smart Bike Control System
+// Board: LilyGO T-A7670SA (ESP32 + 4G + GPS)
+// =============================================
 
-#include <TinyGsmClient.h>
-#include <PubSubClient.h>
+#include "config.h"
+#include "pins.h"
+#include "modem/ModemManager.h"
+#include "mqtt/MqttService.h"
+#include "vehicle/VehicleControl.h"
+#include "battery/BatteryMonitor.h"
+#include <ArduinoJson.h>
+#include <esp_task_wdt.h>
+#include "ota/OtaManager.h"
+#include "ble/BleManager.h"
 
-// --- ขาเชื่อมต่อของ LilyGO T-A7670SA และอุปกรณ์ ---
-#define MODEM_RX 26
-#define MODEM_TX 27
-#define MODEM_PWRKEY 4
-const int RELAY_PIN = 12;
-const int BATTERY_PIN = 32;
+// --- Modules ---
+ModemManager   modemMgr;
+MqttService    mqttSvc;
+BleManager     bleMgr;
+VehicleControl vehicle;
+BatteryMonitor battery;
 
-// --- ตั้งค่าซิมและ MQTT ---
-const char apn[] = "internet"; // เปลี่ยนตามค่ายซิมถ้าจำเป็น
-const char* mqtt_server = "YOUR_DROPLET_IP";
-const int   mqtt_port = 1883;
+// --- Timing ---
+unsigned long lastReportTime = 0;
 
-const char* topic_publish = "bidkan/bikes/BIKE-001/gps";
-const char* topic_subscribe = "bidkan/bikes/BIKE-001/command";
-
-HardwareSerial SerialAT(1);
-TinyGsm modem(SerialAT);
-TinyGsmClient client(modem);
-PubSubClient mqtt(client);
-
-// ฟังก์ชันทำงานเมื่อเซิร์ฟเวอร์สั่งปลดล็อก
-void mqttCallback(char* topic, byte* payload, unsigned int length) {
-  String message;
-  for (int i = 0; i < length; i++) {
-    message += (char)payload[i];
-  }
-  Serial.println("📩 [4G] ได้รับคำสั่ง: " + message);
-
-  if (message == "UNLOCK") {
-    Serial.println("🔓 ปลดล็อกรถ!");
-    digitalWrite(RELAY_PIN, HIGH);
-    // ในสถานการณ์จริง อาจจะปลดล็อกจนกว่าลูกค้าจะกดยืนยันคืนรถ
-    delay(5000); 
-    digitalWrite(RELAY_PIN, LOW);
-    Serial.println("🔒 ล็อกรถ");
-  }
+// --- MQTT Command Handler ---
+void onCommand(const String& command) {
+    if (command == "UNLOCK") {
+        vehicle.unlock();
+    } else if (command == "LOCK") {
+        vehicle.lock();
+    } else if (command.startsWith("UPDATE ")) {
+        String url = command.substring(7); // ดึงข้อความหลัง "UPDATE "
+        url.trim();
+        Serial.println("[Main] ได้รับคำสั่งอัปเดต Firmware จาก: " + url);
+        OtaManager::startUpdate(modemMgr.getClient(), url);
+    } else {
+        Serial.println("[Main] ⚠️ คำสั่งไม่รู้จัก: " + command);
+    }
 }
 
 void setup() {
-  Serial.begin(115200);
-  pinMode(RELAY_PIN, OUTPUT);
-  digitalWrite(RELAY_PIN, LOW);
-  analogReadResolution(12);
+    Serial.begin(SERIAL_BAUD);
+    delay(10);
 
-  // ปลุกโมดูล 4G
-  pinMode(MODEM_PWRKEY, OUTPUT);
-  digitalWrite(MODEM_PWRKEY, HIGH); delay(100);
-  digitalWrite(MODEM_PWRKEY, LOW);  delay(1000);
-  digitalWrite(MODEM_PWRKEY, HIGH);
+    Serial.println("\n=============================================");
+    Serial.println("  BidKan IoT — Smart Bike Control System");
+    Serial.println("=============================================");
 
-  SerialAT.begin(115200, SERIAL_8N1, MODEM_RX, MODEM_TX);
-  delay(3000);
+    // 0. ตั้งค่า Watchdog Timer
+    esp_task_wdt_init(WDT_TIMEOUT_SECONDS, true); // true = Panic/Reboot on timeout
+    esp_task_wdt_add(NULL); // Add current loop() task to WDT
 
-  Serial.println("สตาร์ท 4G และเชื่อมต่ออินเทอร์เน็ต...");
-  modem.restart();
-  if (!modem.gprsConnect(apn, "", "")) {
-    Serial.println("❌ ต่อเน็ตไม่สำเร็จ");
-    while(true);
-  }
-  
-  modem.enableGPS();
-  Serial.println("✅ 4G พร้อม! GPS พร้อม!");
+    // 1. ตั้งค่า Vehicle Control (relays)
+    vehicle.init();
 
-  mqtt.setServer(mqtt_server, mqtt_port);
-  mqtt.setCallback(mqttCallback);
-}
+    // 2. ตั้งค่า Battery Monitor
+    battery.init(BATTERY_ADC_PIN, BATTERY_ADC_MIN, BATTERY_ADC_MAX);
 
-void reconnect() {
-  while (!mqtt.connected()) {
-    Serial.print("Connecting MQTT...");
-    if (mqtt.connect("BIKE_001_PROD")) {
-      Serial.println(" ✅");
-      mqtt.subscribe(topic_subscribe);
-    } else {
-      delay(5000);
+    // 3. เริ่มโมดูล 4G + GPS
+    if (!modemMgr.begin()) {
+        Serial.println("[Main] ❌ เริ่ม 4G ไม่สำเร็จ — รีบูต...");
+        ESP.restart();
     }
-  }
+
+    // 4. ตั้งค่า MQTT
+    String bikeId = modemMgr.getIMEI();
+    mqttSvc.begin(modemMgr.getClient(), onCommand);
+
+    if (!mqttSvc.connect(bikeId)) {
+        Serial.println("[Main] ⚠️ MQTT เชื่อมต่อไม่ได้ — จะ retry ใน loop");
+    }
+
+    // 5. เริ่มต้นระบบ Bluetooth สำรอง
+    bleMgr.begin(bikeId, onCommand);
+
+    Serial.println("[Main] ✅ ระบบพร้อมทำงาน!");
 }
 
 void loop() {
-  if (!mqtt.connected()) reconnect();
-  mqtt.loop();
+    // 1. ตรวจสอบ MQTT connection
+    mqttSvc.reconnectIfNeeded();
+    mqttSvc.loop();
 
-  float lat = 0, lon = 0;
-  int rawBat = analogRead(BATTERY_PIN);
-  int batPercent = map(rawBat, 0, 4095, 0, 100);
+    // 2. อัปเดต Vehicle state machine (non-blocking)
+    vehicle.update();
 
-  // ดึงพิกัดจริงจากดาวเทียม
-  if (modem.getGPS(&lat, &lon)) {
-    String payload = "{\"lat\":" + String(lat, 6) + ", \"lon\":" + String(lon, 6) + ", \"battery\":" + String(batPercent) + "}";
-    mqtt.publish(topic_publish, payload.c_str());
-    Serial.println("🚀 [PROD] ส่งข้อมูล: " + payload);
-  } else {
-    Serial.println("⏳ รอสัญญาณ GPS...");
-  }
+    // 3. ส่งข้อมูลสถานะตาม interval
+    if (millis() - lastReportTime > GPS_REPORT_INTERVAL_MS) {
+        lastReportTime = millis();
 
-  delay(5000);
+        // สร้าง JSON payload ด้วย ArduinoJson
+        JsonDocument doc;
+
+        // GPS data
+        float lat = 0, lon = 0, speed = 0;
+        if (modemMgr.getGPSData(lat, lon, speed)) {
+            doc["lat"]   = serialized(String(lat, 6));
+            doc["lon"]   = serialized(String(lon, 6));
+            doc["speed"] = serialized(String(speed, 1));
+        } else {
+            Serial.println("[Main] ⏳ รอสัญญาณ GPS...");
+            doc["lat"]   = nullptr;
+            doc["lon"]   = nullptr;
+            doc["speed"] = nullptr;
+        }
+
+        // Battery
+        int batPct = battery.getPercent();
+        doc["battery"] = batPct;
+
+        // Check Low Voltage Cutoff
+        if (batPct <= BATTERY_SHUTDOWN_PERCENT) {
+            Serial.println("[Main] ⚠️ แบตเตอรี่ต่ำมาก! กำลังปิดระบบเพื่อป้องกันแบตเตอรี่เสื่อม...");
+            doc["status"] = "LOW_BATTERY_SHUTDOWN";
+            if (mqttSvc.isConnected()) {
+                mqttSvc.publishStatus(doc);
+                delay(1000); // รอให้ส่งข้อความเสร็จ
+            }
+            modemMgr.powerOff();
+            Serial.println("[Main] 💤 เข้าสู่ Deep Sleep ถาวร (ต้องกด Reset เพื่อปลุก)...");
+            esp_deep_sleep_start();
+        }
+
+        // Vehicle status
+        doc["status"] = vehicle.getStateString();
+
+        // Publish
+        if (mqttSvc.isConnected()) {
+            mqttSvc.publishStatus(doc);
+        }
+    }
+
+    // 4. Feed the Watchdog
+    esp_task_wdt_reset();
 }
