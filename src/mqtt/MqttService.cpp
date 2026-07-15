@@ -5,6 +5,7 @@ MqttService* MqttService::_instance = nullptr;
 
 MqttService::MqttService()
     : _onCommand(nullptr)
+    , _lastReconnectAttempt(0)
 {
 }
 
@@ -41,8 +42,11 @@ bool MqttService::connect(const String& bikeId) {
 
     if (connected) {
         Serial.println("[MQTT] ✅ เชื่อมต่อสำเร็จ!");
-        _mqtt.subscribe(_topicSub.c_str());
-        Serial.println("[MQTT] 📡 Subscribe: " + _topicSub);
+        if (_mqtt.subscribe(_topicSub.c_str())) {
+            Serial.println("[MQTT] 📡 Subscribe สำเร็จ: " + _topicSub);
+        } else {
+            Serial.println("[MQTT] ⚠️ Subscribe ล้มเหลว: " + _topicSub);
+        }
         return true;
     }
 
@@ -51,15 +55,25 @@ bool MqttService::connect(const String& bikeId) {
     return false;
 }
 
-void MqttService::publishStatus(const JsonDocument& doc) {
-    // Serialize JSON document to string
-    char buffer[256];
+bool MqttService::publishStatus(const JsonDocument& doc, bool retain) {
+    size_t requiredSize = measureJson(doc);
+    
+    // เผื่อขนาด buffer 512 bytes ให้ครอบคลุมข้อมูลส่วนใหญ่
+    char buffer[512];
+    
+    if (requiredSize >= sizeof(buffer)) {
+        Serial.println("[MQTT] ⚠️ Payload ใหญ่เกิน buffer! ข้อมูลอาจถูกตัดทิ้ง (Size: " + String(requiredSize) + ")");
+        return false;
+    }
+
     size_t len = serializeJson(doc, buffer, sizeof(buffer));
 
-    if (_mqtt.publish(_topicPub.c_str(), buffer, len)) {
+    if (_mqtt.publish(_topicPub.c_str(), (const uint8_t*)buffer, len, retain)) {
         Serial.println("[MQTT] 📤 ส่งข้อมูล: " + String(buffer));
+        return true;
     } else {
         Serial.println("[MQTT] ❌ ส่งข้อมูลล้มเหลว");
+        return false;
     }
 }
 
@@ -76,6 +90,13 @@ bool MqttService::reconnectIfNeeded() {
         return true;
     }
 
+    // Debounce: ป้องกันการพยายามต่อรัวๆ ทุกรอบ loop()
+    unsigned long now = millis();
+    if (now - _lastReconnectAttempt < MQTT_RECONNECT_DELAY_MS) {
+        return false;
+    }
+    _lastReconnectAttempt = now;
+
     Serial.println("[MQTT] 🔄 หลุดการเชื่อมต่อ กำลัง reconnect...");
     return connect(_bikeId);
 }
@@ -89,6 +110,12 @@ void MqttService::_mqttCallbackStatic(char* topic, byte* payload, unsigned int l
 
 // Instance method — แปลง payload แล้วเรียก user callback
 void MqttService::_handleMessage(char* topic, byte* payload, unsigned int length) {
+    // กรอง Topic แบบ zero-allocation เพื่อหลีกเลี่ยง heap fragmentation
+    if (strcmp(topic, _topicSub.c_str()) != 0) {
+        Serial.println("[MQTT] ⚠️ ละทิ้งข้อความจาก Topic ที่ไม่ได้คาดหวัง: " + String(topic));
+        return;
+    }
+
     String message;
     message.reserve(length);
     for (unsigned int i = 0; i < length; i++) {

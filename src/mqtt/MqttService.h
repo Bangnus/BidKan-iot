@@ -35,7 +35,9 @@ public:
 
     /// Publish JSON document ไปยัง status topic
     /// @param doc — ArduinoJson document
-    void publishStatus(const JsonDocument& doc);
+    /// @param retain — ตั้งเป็น true หากต้องการให้ broker จำค่าล่าสุด
+    /// @return true ถ้าส่งสำเร็จ
+    bool publishStatus(const JsonDocument& doc, bool retain = false);
 
     /// ต้องเรียกทุก loop() เพื่อรับข้อมูล
     void loop();
@@ -53,7 +55,10 @@ private:
     String          _topicPub;   // bidkan/<IMEI>/status
     String          _topicSub;   // bidkan/<IMEI>/command
     CommandCallback _onCommand;
+    unsigned long   _lastReconnectAttempt;
 
+    // คำเตือน: คลาสนี้รองรับเพียง 1 instance (Singleton pattern) เท่านั้น
+    // เนื่องจาก PubSubClient ต้องการ static callback C-style function pointer
     static MqttService* _instance;
     static void _mqttCallbackStatic(char* topic, byte* payload, unsigned int length);
     void _handleMessage(char* topic, byte* payload, unsigned int length);
