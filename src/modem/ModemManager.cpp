@@ -48,7 +48,7 @@ void ModemManager::powerOn() {
     delay(1000);
     digitalWrite(pwrKey, HIGH);
     
-    // 3. รอให้ชิปบูตเสร็จ (เช็คซ้ำสูงสุด 10 วินาที)
+    // 3. รอให้ชิปบูตเสร็จ (delay 1s + timeout 1s = ~2s ต่อรอบ, รวม 10 รอบ = สูงสุด ~20 วินาที)
     Serial.print("[Modem] รอชิป 4G บูต.");
     bool booted = false;
     for (int i = 0; i < 10; i++) {
@@ -140,7 +140,7 @@ bool ModemManager::enableGPS() {
     return true;
 }
 
-bool ModemManager::getGPSData(float &lat, float &lon, float &speed) {
+bool ModemManager::getGPSData(float &lat, float &lon) {
     // ใช้ AT+CGNSSINFO เพื่อดึงพิกัด GNSS
     // Response format: +CGNSSINFO: <mode>,<GPS-SVs>,<GLONASS-SVs>,...,<lat>,<N/S>,<lon>,<E/W>,...
     _modem.sendAT("+CGNSSINFO");
@@ -150,6 +150,7 @@ bool ModemManager::getGPSData(float &lat, float &lon, float &speed) {
         // ตั้ง timeout เพื่อไม่ให้จมถ้าเกิดอ่านไม่จบ
         _modem.stream.setTimeout(2000); 
         response = _modem.stream.readStringUntil('\n');
+        _modem.stream.setTimeout(1000); // รีเซ็ตกลับเป็นค่าเริ่มต้นมาตรฐาน
         _modem.waitResponse(); // consume OK
     } else {
         return false; // Time out waiting for +CGNSSINFO
@@ -160,10 +161,10 @@ bool ModemManager::getGPSData(float &lat, float &lon, float &speed) {
         return false;
     }
 
-    return parseGNSSInfo(response, lat, lon, speed);
+    return parseGNSSInfo(response, lat, lon);
 }
 
-bool ModemManager::parseGNSSInfo(const String& response, float &lat, float &lon, float &speed) {
+bool ModemManager::parseGNSSInfo(const String& response, float &lat, float &lon) {
     // +CGNSSINFO: <mode>,<GPS-SVs>,<GLONASS-SVs>,<BEIDOU-SVs>,<lat>,<N/S>,<lon>,<E/W>,<date>,<UTC-time>,<alt>,<speed>,<course>
     // Example:  3,08,04,01,1345.5678,N,10030.1234,E,150726,110000.0,25.3,0.5,180.2 (Note: "+CGNSSINFO:" was already parsed out)
     // If no fix:  ,,,,,,,,
@@ -221,13 +222,6 @@ bool ModemManager::parseGNSSInfo(const String& response, float &lat, float &lon,
     float lonMin = lonRaw - (lonDeg * 100);
     lon = lonDeg + (lonMin / 60.0f);
     if (lonDir == "W") lon = -lon;
-    
-    // Parse speed
-    String speedStr = getField(response, 11);
-    speed = 0;
-    if (speedStr.length() > 0) {
-        speed = speedStr.toFloat();
-    }
     
     return true;
 }

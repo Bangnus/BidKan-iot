@@ -94,16 +94,14 @@ void loop() {
         JsonDocument doc;
 
         // GPS data
-        float lat = 0, lon = 0, speed = 0;
-        if (modemMgr.getGPSData(lat, lon, speed)) {
+        float lat = 0, lon = 0;
+        if (modemMgr.getGPSData(lat, lon)) {
             doc["lat"]   = serialized(String(lat, 6));
             doc["lon"]   = serialized(String(lon, 6));
-            doc["speed"] = serialized(String(speed, 1));
         } else {
             Serial.println("[Main] ⏳ รอสัญญาณ GPS...");
             doc["lat"]   = nullptr;
             doc["lon"]   = nullptr;
-            doc["speed"] = nullptr;
         }
 
         // Battery

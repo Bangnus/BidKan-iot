@@ -33,7 +33,7 @@ public:
 
     /// ดึงพิกัด GPS ผ่าน AT+CGNSSINFO
     /// @return true ถ้ามี GPS fix
-    bool getGPSData(float &lat, float &lon, float &speed);
+    bool getGPSData(float &lat, float &lon);
 
     /// ดึงเลข IMEI ของโมดูล
     String getIMEI();
@@ -51,7 +51,7 @@ private:
 
     void powerOn();
     bool isModemReady();
-    bool parseGNSSInfo(const String& response, float &lat, float &lon, float &speed);
+    bool parseGNSSInfo(const String& response, float &lat, float &lon);
 };
 
 #endif // MODEM_MANAGER_H
