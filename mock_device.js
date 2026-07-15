@@ -35,8 +35,19 @@ client.on('connect', () => {
 });
 
 client.on('message', (topic, message) => {
-    const cmd = message.toString().trim();
+    let cmd = message.toString().trim();
     console.log(`\n📩 ได้รับคำสั่งจากแอป: ${cmd}`);
+
+    // ลองแปลงเป็น JSON ถ้าคำสั่งส่งมาเป็น JSON object
+    try {
+        const parsed = JSON.parse(cmd);
+        if (parsed.status) {
+            if (parsed.status === 'LOCKED') cmd = 'LOCK';
+            else if (parsed.status === 'UNLOCKED') cmd = 'UNLOCK';
+        }
+    } catch (e) {
+        // ถ้าไม่ใช่ JSON ก็ปล่อยให้เป็น Plaintext ดั้งเดิม
+    }
 
     if (cmd === 'UNLOCK') {
         state.status = 'UNLOCKED';

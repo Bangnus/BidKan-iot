@@ -26,17 +26,30 @@ unsigned long lastReportTime = 0;
 
 // --- MQTT Command Handler ---
 void onCommand(const String& command) {
-    if (command == "UNLOCK") {
+    String cmd = command;
+
+    // ลองเช็คว่าเป็น JSON หรือไม่ (ขึ้นต้นด้วย '{')
+    if (cmd.startsWith("{")) {
+        JsonDocument doc;
+        DeserializationError error = deserializeJson(doc, cmd);
+        if (!error && doc.containsKey("status")) {
+            String status = doc["status"];
+            if (status == "LOCKED") cmd = "LOCK";
+            else if (status == "UNLOCKED") cmd = "UNLOCK";
+        }
+    }
+
+    if (cmd == "UNLOCK") {
         vehicle.unlock();
-    } else if (command == "LOCK") {
+    } else if (cmd == "LOCK") {
         vehicle.lock();
-    } else if (command.startsWith("UPDATE ")) {
-        String url = command.substring(7); // ดึงข้อความหลัง "UPDATE "
+    } else if (cmd.startsWith("UPDATE ")) {
+        String url = cmd.substring(7); // ดึงข้อความหลัง "UPDATE "
         url.trim();
         Serial.println("[Main] ได้รับคำสั่งอัปเดต Firmware จาก: " + url);
         OtaManager::startUpdate(modemMgr.getClient(), url);
     } else {
-        Serial.println("[Main] ⚠️ คำสั่งไม่รู้จัก: " + command);
+        Serial.println("[Main] ⚠️ คำสั่งไม่รู้จัก: " + cmd);
     }
 }
 
