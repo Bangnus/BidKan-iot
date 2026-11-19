@@ -4,9 +4,9 @@
 #include <TinyGsmClient.h>
 #include <PubSubClient.h>
 
-// --- ขาฮาร์ดแวร์ ---
-const int RELAY_IGNITION_PIN = 12; // Relay 1 -> คุมกุญแจรถ
-const int RELAY_LOCK_PIN = 14;     // Relay 2 -> คุมล็อกล้อ
+// --- ขาฮาร์ดแวร์ (ใช้ GPIO 18, 19 ป้องกัน Strapping Pin) ---
+const int RELAY_IGNITION_PIN = 18; // Relay 1 -> คุมกุญแจรถ
+const int RELAY_LOCK_PIN = 19;     // Relay 2 -> คุมล็อกล้อ
 
 #define MODEM_RX     26
 #define MODEM_TX     27
