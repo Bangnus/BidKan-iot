@@ -49,19 +49,21 @@ void onCommand(const String& command) {
 
     if (cmd == "UNLOCK") {
         vehicle.unlock();
-        // เสียงตอนปลดรถ ตัวรถมีเสียงเดิมจากโรงงานอยู่แล้ว ไม่ต้องส่งเสียงซ้อน
+        // เสียงตอนเปิดรถ ตัวรถมีเสียงเดิมจากโรงงานอยู่แล้ว ไม่ต้องส่งเสียงซ้อน
     } else if (cmd == "LOCK") {
         vehicle.lock();
+        // เสียงล็อกและกันขโมย ตัวรถมีกล่องควบคุมเดิมอยู่แล้ว
         if (reason == "out_of_boundary") {
-            buzzer.playGeofenceAlert(); // ลำโพงส่งเสียงเตือนออกนอกเขตทันที
+            buzzer.playGeofenceAlert(); // เตือนออกนอกเขตทันที
+        } else if (reason == "no_parking_zone") {
+            buzzer.playNoParkingAlert(); // เตือนจอดนอกโซน
         }
+    } else if (cmd == "BEEP" || cmd == "LOCATE" || cmd == "FIND_BIKE") {
+        buzzer.playLocateBeacon(); // เสียงส่งสัญญาณหาตำแหน่งรถ (Find Bike)
     } else if (cmd == "GEOFENCE_ALERT" || cmd == "OUT_OF_ZONE") {
         buzzer.playGeofenceAlert();
-    } else if (cmd == "BEEP") {
-        if (reason == "unauthorized_movement" || isAlarm) buzzer.playTheftAlarm();
-        else buzzer.playBeep();
-    } else if (cmd == "ALARM" || cmd == "THEFT") {
-        buzzer.playTheftAlarm();
+    } else if (cmd == "NO_PARKING") {
+        buzzer.playNoParkingAlert();
     } else if (cmd == "STOP_ALARM" || cmd == "MUTE") {
         buzzer.stop();
     } else if (cmd.startsWith("UPDATE ")) {

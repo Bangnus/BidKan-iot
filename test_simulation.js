@@ -11,14 +11,10 @@ const legacyCmdTopic = `bidkan/bikes/${BIKE_ID}/command`;
 
 // เส้นทางจำลองการขับขี่ภายใน ม.เกษตรฯ กำแพงแสน (วนเป็นวงรอบ อยู่ในโซนให้บริการ)
 const CAMPUS_ROUTE = [
-  { lat: 14.0234, lon: 99.9782 },
-  { lat: 14.0238, lon: 99.9788 },
-  { lat: 14.0243, lon: 99.9794 },
-  { lat: 14.0249, lon: 99.9798 },
-  { lat: 14.0254, lon: 99.9793 },
-  { lat: 14.0252, lon: 99.9785 },
-  { lat: 14.0246, lon: 99.9779 },
-  { lat: 14.0239, lon: 99.9777 },
+  { lat: 14.0234, lon: 99.9782 }, { lat: 14.0238, lon: 99.9788 },
+  { lat: 14.0243, lon: 99.9794 }, { lat: 14.0249, lon: 99.9798 },
+  { lat: 14.0254, lon: 99.9793 }, { lat: 14.0252, lon: 99.9785 },
+  { lat: 14.0246, lon: 99.9779 }, { lat: 14.0239, lon: 99.9777 },
 ];
 
 const state = {
@@ -121,8 +117,10 @@ async function runTests() {
       startMoving(client);
     } else if (command === 'lock') {
       stopMoving(client, reason);
-    } else if (command === 'beep') {
-      console.log(`🔔 [BUZZER] ${BIKE_ID} ส่งเสียงเตือน! (${reason || 'remote_beep'})`);
+    } else if (command === 'beep' || command === 'locate') {
+      console.log(`🔊 [IOT SPEAKER / BUZZER] 📍 ${BIKE_ID} บี๊บส่งสัญญาณหาตำแหน่งรถ (Find Bike Beacon)! (${reason || 'remote_beep'})`);
+    } else if (command === 'geofence_alert') {
+      console.log(`🔊 [IOT SPEAKER / BUZZER] ⚠️ ออกนอกเขตให้บริการ (Geofence Alert)! ลำโพงบนตัวรถส่งเสียงหวูดเตือน`);
     }
   });
 
@@ -181,16 +179,10 @@ async function runTests() {
   state.speed = 0;
   publishGps(client);
 
-  console.log('\n======================================================');
-  console.log(`📊 Test Summary: Total commands captured = ${receivedCommands.length}`);
-  const hasLock = receivedCommands.some((c) => c.command === 'lock');
-  const hasUnlock = receivedCommands.some((c) => c.command === 'unlock');
-  const hasBeep = receivedCommands.some((c) => c.command === 'beep');
-
-  console.log(`   - Unlock Command Delivered: ${hasUnlock ? '✅ PASS' : '❌ FAIL'}`);
-  console.log(`   - Relay Cutoff Lock Command Delivered: ${hasLock ? '✅ PASS' : '❌ FAIL'}`);
-  console.log(`   - Theft / Buzzer Command Delivered: ${hasBeep ? '✅ PASS' : 'ℹ️ NOTED'}`);
-  console.log('======================================================\n');
+  console.log(`\n======================================================\n📊 Test Summary: Total commands captured = ${receivedCommands.length}`);
+  console.log(`   - Unlock Command Delivered: ${receivedCommands.some((c) => c.command === 'unlock') ? '✅ PASS' : '❌ FAIL'}`);
+  console.log(`   - Relay Cutoff Lock Command Delivered: ${receivedCommands.some((c) => c.command === 'lock') ? '✅ PASS' : '❌ FAIL'}`);
+  console.log(`   - Locate / Buzzer Command Delivered: ${receivedCommands.some((c) => c.command === 'beep') ? '✅ PASS' : 'ℹ️ NOTED'}\n======================================================\n`);
 
   client.end();
   process.exit(0);

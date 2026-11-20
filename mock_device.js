@@ -70,16 +70,12 @@ client.on('message', (topic, message) => {
         executeUnlock();
     } else if (cmd === 'LOCK') {
         executeLock(reason);
-    } else if (cmd === 'BEEP') {
-        if (reason === 'unauthorized_movement') {
-            console.log(`🚨 [BUZZER: THEFT ALARM] 🔊 ไซเรนกันขโมยดังขึ้นบนลำโพงรถ! (ตรวจจับการเคลื่อนย้ายผิดปกติ)`);
-        } else {
-            console.log(`🔔 [BUZZER: REMOTE BEEP] 🔊 บี๊บส่งสัญญาณหาตำแหน่งรถ! (${reason || 'ตามคำสั่งแอดมิน'})`);
-        }
+    } else if (cmd === 'BEEP' || cmd === 'LOCATE' || cmd === 'FIND_BIKE') {
+        console.log(`🔊 [IOT SPEAKER / BUZZER] 📍 บี๊บส่งสัญญาณหาตำแหน่งรถ! (${reason || 'คำสั่งจากแอป/หลังบ้าน'})`);
     } else if (cmd === 'GEOFENCE_ALERT') {
-        console.log(`🔊 [BUZZER: GEOFENCE ALERT] ⚠️ หวูดเตือนฉุกเฉินดังขึ้นบนลำโพงรถ! รถออกนอกพื้นที่ให้บริการ Riding Limit Zone!`);
-    } else if (cmd === 'ALARM' || cmd === 'THEFT') {
-        console.log(`🚨 [BUZZER: THEFT ALARM] 🔊 ไซเรนกันขโมยดังขึ้นบนลำโพงรถ!`);
+        console.log(`🔊 [IOT SPEAKER / BUZZER] ⚠️ ออกนอกเขตให้บริการ! ลำโพงบนตัวรถส่งเสียงหวูดเตือนดังขึ้น (Geofence Alert)`);
+    } else if (cmd === 'NO_PARKING') {
+        console.log(`🔊 [IOT SPEAKER / BUZZER] 🚫 จอดนอกโซนที่กำหนด! ลำโพงบนตัวรถส่งเสียงเตือนพื้นที่ห้ามจอด (No-Parking Alert)`);
     } else {
         console.log(`⚠️ [COMMAND] ไม่รู้จักคำสั่ง: ${cmd}`);
     }
@@ -99,6 +95,9 @@ function executeUnlock() {
 }
 
 function executeLock(reason) {
+    if (reason === 'out_of_boundary') {
+        console.log(`🔊 [IOT SPEAKER / BUZZER] ⚠️ ออกนอกเขตให้บริการ! ลำโพงบนตัวรถส่งเสียงหวูดเตือนดังขึ้น (Geofence Alert)`);
+    }
     if (reason === 'out_of_boundary') {
         console.log(`🔊 [IOT SPEAKER / BUZZER] ⚠️ ออกนอกเขตให้บริการ! ลำโพงบนตัวรถส่งเสียงหวูดเตือนดังขึ้น (Geofence Alert)`);
     }

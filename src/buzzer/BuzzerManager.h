@@ -5,15 +5,13 @@
 #include "config.h"
 #include "pins.h"
 
-/// รูปแบบเสียงเอฟเฟกต์สำหรับลำโพง/บัซเซอร์
+/// รูปแบบเสียงสำหรับลำโพงเสริม IoT (เฉพาะฟังก์ชันที่ตัวรถเดิมไม่มี)
 enum BuzzerSoundType {
     SOUND_IDLE,
-    SOUND_UNLOCK_CHIME,     // ปลดล็อกสำเร็จ: โน้ตขาขึ้น 3 จังหวะ
-    SOUND_LOCK_CHIME,       // ล็อกสำเร็จ: โน้ตขาลง 2 จังหวะ
-    SOUND_BEEP_LOCATE,      // บี๊บหาตำแหน่ง: 2 จังหวะสั้น
-    SOUND_GEOFENCE_ALERT,   // เตือนออกนอกเขตให้บริการ (ฉุกเฉินสลับความถี่)
-    SOUND_THEFT_SIREN,      // ไซเรนกันขโมย: ความถี่สูงสลับไปมา
-    SOUND_LOW_BATTERY_WARN  // เตือนแบตเตอรี่วิกฤต
+    SOUND_GEOFENCE_ALERT,   // เสียงเตือนออกนอกเขตให้บริการ (Geofence Breach)
+    SOUND_LOCATE_BEACON,    // เสียงส่งสัญญาณหาตำแหน่งรถ (Find Bike / Remote Locate)
+    SOUND_NO_PARK_ALERT,    // เสียงเตือนจอดผิดจุด / นอกโซนจอด
+    SOUND_LOW_BATTERY_WARN  // เสียงเตือนแบตเตอรี่วิกฤต (<15%)
 };
 
 /// โครงสร้างโน้ตเสียงแต่ละสเต็ป
@@ -23,44 +21,33 @@ struct AudioToneStep {
 };
 
 /**
- * BuzzerManager — ควบคุมลำโพงและบัซเซอร์ส่งเสียงเตือนบนรถ BidKan
- * ออกแบบด้วย State Machine แบบ Non-blocking 100% ไม่กระทบ MQTT loop
+ * BuzzerManager — จัดการลำโพงแจ้งเตือน IoT บนรถ BidKan
+ * ทำงานแบบ Non-blocking 100% ผ่าน State Machine และ millis()
+ * ให้บริการเฉพาะเสียงเสริมที่ตัวรถเดิมไม่มี (เช่น ออกนอกเขต, หาตำแหน่งรถ, ห้ามจอด)
  */
 class BuzzerManager {
 public:
     BuzzerManager();
 
-    /// เริ่มต้นพินลำโพงและตั้งค่า PWM LEDC
     void init(uint8_t pin = BUZZER_PIN, uint8_t channel = BUZZER_PWM_CHANNEL);
-
-    /// ต้องเรียกทุก loop() เพื่อขับสเต็ปเสียงตามเวลา millis()
     void update();
 
-    /// เล่นเสียงปลดล็อกรถ (Chime ขาขึ้น)
-    void playUnlock();
-
-    /// เล่นเสียงล็อกรถ (Chime ขาลง)
-    void playLock();
-
-    /// เล่นเสียงบี๊บส่งสัญญาณหาตำแหน่งรถ (Remote Beep)
-    void playBeep();
-
-    /// เล่นเสียงเตือนออกนอกเขต Riding Limit Zone
+    /// ส่งเสียงเตือนออกนอกเขตให้บริการ (หวูดเตือนฉุกเฉินถี่ 2400Hz/1300Hz)
     void playGeofenceAlert();
 
-    /// เล่นเสียงไซเรนกันขโมยเมื่อตรวจจับการเคลื่อนย้ายผิดปกติ
-    void playTheftAlarm();
+    /// ส่งเสียงสัญญาณหาตำแหน่งรถ (Find Bike Beacon — เสียงกังวานนำทางระยะไกล)
+    void playLocateBeacon();
 
-    /// เล่นเสียงเตือนแบตเตอรี่ต่ำ
+    /// ส่งเสียงเตือนจุดห้ามจอด / นอกโซนที่กำหนด
+    void playNoParkingAlert();
+
+    /// ส่งเสียงเตือนแบตเตอรี่ต่ำวิกฤต
     void playLowBattery();
 
-    /// หยุดเสียงทันที
+    /// สั่งหยุดเสียงทันที
     void stop();
 
-    /// ตรวจสอบว่ากำลังส่งเสียงอยู่หรือไม่
     bool isPlaying() const;
-
-    /// รูปแบบเสียงปัจจุบัน
     BuzzerSoundType getCurrentSound() const;
 
 private:

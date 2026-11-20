@@ -1,6 +1,6 @@
 // =============================================
 // BidKan IoT — Hardware Unit Test: Buzzer / Speaker
-// ทดสอบส่งเสียง: Unlock, Lock, Beep, Geofence Alert, Siren
+// ทดสอบเฉพาะเสียงเสริมที่ตัวรถเดิมไม่มี (ออกจากเขต, หาตำแหน่ง, ห้ามจอด, แบตต่ำ)
 // =============================================
 
 #include <Arduino.h>
@@ -23,33 +23,25 @@ void setup() {
 void loop() {
     buzzer.update();
 
-    if (millis() - lastActionTime > 3500) {
+    if (millis() - lastActionTime > 4000) {
         lastActionTime = millis();
-        testStep = (testStep + 1) % 6;
+        testStep = (testStep + 1) % 4;
 
         switch (testStep) {
             case 0:
-                Serial.println("\n[Test 1/6] >> Testing Unlock Chime...");
-                buzzer.playUnlock();
-                break;
-            case 1:
-                Serial.println("\n[Test 2/6] >> Testing Lock Chime...");
-                buzzer.playLock();
-                break;
-            case 2:
-                Serial.println("\n[Test 3/6] >> Testing Remote Locate Beep...");
-                buzzer.playBeep();
-                break;
-            case 3:
-                Serial.println("\n[Test 4/6] >> Testing Geofence Breach Warning...");
+                Serial.println("\n[Test 1/4] >> Testing Geofence Breach Warning...");
                 buzzer.playGeofenceAlert();
                 break;
-            case 4:
-                Serial.println("\n[Test 5/6] >> Testing Theft Alarm Siren...");
-                buzzer.playTheftAlarm();
+            case 1:
+                Serial.println("\n[Test 2/4] >> Testing Remote Locate Beacon...");
+                buzzer.playLocateBeacon();
                 break;
-            case 5:
-                Serial.println("\n[Test 6/6] >> Testing Low Battery Warning...");
+            case 2:
+                Serial.println("\n[Test 3/4] >> Testing No-Parking Warning...");
+                buzzer.playNoParkingAlert();
+                break;
+            case 3:
+                Serial.println("\n[Test 4/4] >> Testing Low Battery Warning...");
                 buzzer.playLowBattery();
                 break;
         }
