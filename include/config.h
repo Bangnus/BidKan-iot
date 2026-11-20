@@ -20,7 +20,7 @@
 #define APN_PASS        ""
 
 // --- MQTT Server ---
-#define MQTT_SERVER     "broker.hivemq.com" // ใช้ Public Broker ฟรีสำหรับเทสก่อน (เปลี่ยนเป็น IP ของคุณตอนลง Production)
+#define MQTT_SERVER     "159.223.37.4" // Production Mosquitto MQTT Broker
 #define MQTT_PORT       1883
 #define MQTT_USER       ""                  // ใส่ถ้าเซิร์ฟเวอร์ต้องการ auth
 #define MQTT_PASS       ""
