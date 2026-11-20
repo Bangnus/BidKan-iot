@@ -43,6 +43,19 @@
 #define BATTERY_ADC_MAX  3226
 #define BATTERY_SHUTDOWN_PERCENT 15 // ตัดการทำงาน 4G ถาวรเมื่อแบตเหลือต่ำกว่า 15%
 
+// --- Relay Trigger Logic ---
+// true  = Active-LOW  (โมดูลรีเลย์ส่วนใหญ่: LOW = ดูด/ทำงาน, HIGH = ปล่อย/ปิด)
+// false = Active-HIGH (เมื่อเสียบจัมเปอร์ฝั่ง HIGH: HIGH = ดูด/ทำงาน, LOW = ปล่อย/ปิด)
+#define RELAY_ACTIVE_LOW true
+
+#if RELAY_ACTIVE_LOW
+  #define RELAY_ON   LOW
+  #define RELAY_OFF  HIGH
+#else
+  #define RELAY_ON   HIGH
+  #define RELAY_OFF  LOW
+#endif
+
 // --- Serial Baud Rate ---
 #define SERIAL_BAUD      115200
 #define MODEM_BAUD       115200

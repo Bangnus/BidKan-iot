@@ -7,13 +7,13 @@ VehicleControl::VehicleControl()
 }
 
 void VehicleControl::init() {
+    // กำหนดระดับสัญญาณก่อนตั้ง pinMode(OUTPUT) เพื่อป้องกันรีเลย์กระตุกตอนบูต
+    // สถานะเริ่มต้น: รถล็อก (กุญแจ OFF, ล้อล็อก ON)
+    digitalWrite(RELAY_IGNITION_PIN, RELAY_OFF);
+    digitalWrite(RELAY_LOCK_PIN, RELAY_ON);
+
     pinMode(RELAY_IGNITION_PIN, OUTPUT);
     pinMode(RELAY_LOCK_PIN, OUTPUT);
-
-    // สถานะเริ่มต้น: รถล็อก
-    // กุญแจ OFF (LOW), ล้อล็อก (HIGH = ดึง GND)
-    digitalWrite(RELAY_IGNITION_PIN, LOW);
-    digitalWrite(RELAY_LOCK_PIN, HIGH);
 
     _state = VEHICLE_LOCKED;
     Serial.println("[Vehicle] 🔒 เริ่มต้น: รถล็อก");
@@ -28,7 +28,7 @@ void VehicleControl::unlock() {
     Serial.println("[Vehicle] 🔓 เริ่มปลดล็อก...");
 
     // Step 1: คลายล็อกล้อก่อน
-    digitalWrite(RELAY_LOCK_PIN, LOW);
+    digitalWrite(RELAY_LOCK_PIN, RELAY_OFF);
 
     _state = VEHICLE_UNLOCKING;
     _transitionStart = millis();
@@ -43,7 +43,7 @@ void VehicleControl::lock() {
     Serial.println("[Vehicle] 🔒 เริ่มล็อก...");
 
     // Step 1: ดับเครื่องก่อน
-    digitalWrite(RELAY_IGNITION_PIN, LOW);
+    digitalWrite(RELAY_IGNITION_PIN, RELAY_OFF);
 
     _state = VEHICLE_LOCKING;
     _transitionStart = millis();
@@ -56,7 +56,7 @@ void VehicleControl::update() {
         case VEHICLE_UNLOCKING:
             // รอล้อคลายตัว แล้วเปิดกุญแจ
             if (elapsed >= UNLOCK_DELAY_MS) {
-                digitalWrite(RELAY_IGNITION_PIN, HIGH);
+                digitalWrite(RELAY_IGNITION_PIN, RELAY_ON);
                 _state = VEHICLE_UNLOCKED;
                 Serial.println("[Vehicle] ✅ รถพร้อมขับ");
             }
@@ -65,7 +65,7 @@ void VehicleControl::update() {
         case VEHICLE_LOCKING:
             // รอเครื่องดับสนิท แล้วล็อกล้อ
             if (elapsed >= LOCK_DELAY_MS) {
-                digitalWrite(RELAY_LOCK_PIN, HIGH);
+                digitalWrite(RELAY_LOCK_PIN, RELAY_ON);
                 _state = VEHICLE_LOCKED;
                 Serial.println("[Vehicle] ✅ รถล็อกสมบูรณ์");
             }
