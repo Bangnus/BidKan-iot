@@ -1,8 +1,8 @@
-﻿#include <Arduino.h>
+#include <Arduino.h>
 
-// --- กำหนดขาอุปกรณ์ (ใช้ GPIO 21, 22 — ห้ามใช้ 12 (ไฟโมเด็ม)) ---
-const int RELAY_IGNITION_PIN = 21; // Relay 1: สวิตช์กุญแจ (จ่ายไฟให้รถ)
-const int RELAY_LOCK_PIN = 22;     // Relay 2: สั่งล็อกล้อ (ต่อตรง Controller)
+// --- กำหนดขาอุปกรณ์ (ใช้ GPIO 18, 19 ป้องกัน Strapping Pin) ---
+const int RELAY_IGNITION_PIN = 18; // Relay 1: สวิตช์กุญแจ (จ่ายไฟให้รถ)
+const int RELAY_LOCK_PIN = 19;     // Relay 2: สั่งล็อกล้อ (ต่อตรง Controller)
 const int BATTERY_PIN = 32;        // ขาวัดแบตเตอรี่ (วงจร 20K & 1K)
 
 void setup() {

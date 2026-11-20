@@ -19,12 +19,12 @@
 #define BOARD_POWERON_PIN 12
 
 // --- Relay Outputs ---
-// ห้ามใช้ GPIO12 (เปิดไฟโมเด็ม) / GPIO14 (SD card) — ใช้ 21/22 (ไม่ได้ใช้ I2C)
+// ย้ายจากขา 12/14 มาที่ 18/19 เพื่อหลีกเลี่ยง Strapping Pin และ SD Card Clock
 // Relay 1: ควบคุมสวิตช์กุญแจ (จ่ายไฟให้รถ)
-#define RELAY_IGNITION_PIN  21
+#define RELAY_IGNITION_PIN  18
 
 // Relay 2: ควบคุมล็อกล้อ (ต่อตรง Controller)
-#define RELAY_LOCK_PIN      22
+#define RELAY_LOCK_PIN      19
 
 // --- Analog Input ---
 // วัดแรงดันแบตเตอรี่ผ่าน voltage divider (20K + 1K)

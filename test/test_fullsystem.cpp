@@ -1,12 +1,12 @@
-﻿#define TINY_GSM_MODEM_SIM7600 
+#define TINY_GSM_MODEM_SIM7600 
 #define TINY_GSM_RX_BUFFER 1024
 
 #include <TinyGsmClient.h>
 #include <PubSubClient.h>
 
-// --- ขาฮาร์ดแวร์ (ใช้ GPIO 21, 22 — ห้ามใช้ 12 (ไฟโมเด็ม)) ---
-const int RELAY_IGNITION_PIN = 21; // Relay 1 -> คุมกุญแจรถ
-const int RELAY_LOCK_PIN = 22;     // Relay 2 -> คุมล็อกล้อ
+// --- ขาฮาร์ดแวร์ (ใช้ GPIO 18, 19 ป้องกัน Strapping Pin) ---
+const int RELAY_IGNITION_PIN = 18; // Relay 1 -> คุมกุญแจรถ
+const int RELAY_LOCK_PIN = 19;     // Relay 2 -> คุมล็อกล้อ
 
 #define MODEM_RX     26
 #define MODEM_TX     27
