@@ -71,7 +71,15 @@ client.on('message', (topic, message) => {
     } else if (cmd === 'LOCK') {
         executeLock(reason);
     } else if (cmd === 'BEEP') {
-        console.log(`🔔 [BUZZER ALARM] 🔊 บี๊บเตือนภัยดังขึ้น! (เหตุผล: ${reason || 'ตามคำสั่งแอดมิน'})`);
+        if (reason === 'unauthorized_movement') {
+            console.log(`🚨 [BUZZER: THEFT ALARM] 🔊 ไซเรนกันขโมยดังขึ้นบนลำโพงรถ! (ตรวจจับการเคลื่อนย้ายผิดปกติ)`);
+        } else {
+            console.log(`🔔 [BUZZER: REMOTE BEEP] 🔊 บี๊บส่งสัญญาณหาตำแหน่งรถ! (${reason || 'ตามคำสั่งแอดมิน'})`);
+        }
+    } else if (cmd === 'GEOFENCE_ALERT') {
+        console.log(`🔊 [BUZZER: GEOFENCE ALERT] ⚠️ หวูดเตือนฉุกเฉินดังขึ้นบนลำโพงรถ! รถออกนอกพื้นที่ให้บริการ Riding Limit Zone!`);
+    } else if (cmd === 'ALARM' || cmd === 'THEFT') {
+        console.log(`🚨 [BUZZER: THEFT ALARM] 🔊 ไซเรนกันขโมยดังขึ้นบนลำโพงรถ!`);
     } else {
         console.log(`⚠️ [COMMAND] ไม่รู้จักคำสั่ง: ${cmd}`);
     }
@@ -85,12 +93,15 @@ function executeUnlock() {
         state.relay_ignition = true;
         state.status = 'UNLOCKED';
         state.speed = 15;
-        console.log(`✅ [Vehicle] รถปลดล็อกพร้อมขับขี่! (Status: UNLOCKED)`);
+        console.log(`✅ [Vehicle] รถปลดล็อกพร้อมขับขี่! (เสียงตอนปลดรถใช้เสียงเดิมของตัวรถ)`);
         sendTelemetry();
     }, 400);
 }
 
 function executeLock(reason) {
+    if (reason === 'out_of_boundary') {
+        console.log(`🔊 [IOT SPEAKER / BUZZER] ⚠️ ออกนอกเขตให้บริการ! ลำโพงบนตัวรถส่งเสียงหวูดเตือนดังขึ้น (Geofence Alert)`);
+    }
     console.log(`[Vehicle] 🛑 Step 1: สั่งตัดไฟมอเตอร์ทันที (RELAY_IGNITION = LOW)...`);
     state.relay_ignition = false;
     state.speed = 0;

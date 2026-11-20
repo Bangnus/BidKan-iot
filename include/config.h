@@ -56,6 +56,11 @@
   #define RELAY_OFF  LOW
 #endif
 
+// --- Buzzer / Speaker Configuration ---
+#define BUZZER_PWM_CHANNEL       0      // LEDC channel สำหรับสังเคราะห์ความถี่เสียง
+#define BUZZER_PWM_RESOLUTION    8      // ความละเอียด 8-bit (0-255)
+#define BUZZER_DEFAULT_VOLUME    128    // 50% duty cycle (มาตรฐานความดังลำโพง)
+
 // --- Serial Baud Rate ---
 #define SERIAL_BAUD      115200
 #define MODEM_BAUD       115200

@@ -76,6 +76,9 @@ function stopMoving(client, reason = '') {
     moveTimer = null;
   }
   console.log(`🔒 [Vehicle] ${BIKE_ID} LOCKED -> หยุดเคลื่อนที่ ${reason ? `(${reason})` : ''}`);
+  if (reason === 'out_of_boundary') {
+    console.log(`🔊 [IOT SPEAKER / BUZZER] ⚠️ ออกนอกเขตให้บริการ (Geofence Breach)! ลำโพงบนตัวรถส่งเสียงหวูดเตือนดังต่อเนื่อง`);
+  }
   publishGps(client);
 }
 

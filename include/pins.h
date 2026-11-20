@@ -30,4 +30,9 @@
 // วัดแรงดันแบตเตอรี่ผ่าน voltage divider (20K + 1K)
 #define BATTERY_ADC_PIN     32
 
+// --- Audio / Buzzer Output ---
+// ขาต่อลำโพง / บัซเซอร์เตือนภัย (รองรับ Active Buzzer และ Passive Speaker ผ่าน PWM)
+// ใช้สำหรับ: ปลดล็อก, ล็อก, บี๊บหาตำแหน่ง, แจ้งเตือนออกนอกเขต Geofence, สัญญาณกันขโมย
+#define BUZZER_PIN          21
+
 #endif // BIDKAN_PINS_H
