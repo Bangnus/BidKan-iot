@@ -32,8 +32,8 @@ void onCommand(const String& command) {
     if (cmd.startsWith("{")) {
         JsonDocument doc;
         DeserializationError error = deserializeJson(doc, cmd);
-        if (!error && doc.containsKey("status")) {
-            String status = doc["status"];
+        if (!error && doc["status"].is<const char*>()) {
+            String status = doc["status"].as<String>();
             if (status == "LOCKED") cmd = "LOCK";
             else if (status == "UNLOCKED") cmd = "UNLOCK";
         }

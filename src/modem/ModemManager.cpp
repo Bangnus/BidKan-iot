@@ -28,7 +28,16 @@ void ModemManager::powerOn() {
     // ดังนั้นต้องเช็คก่อนว่าเปิดอยู่หรือยัง
 
     int pwrKey = MODEM_PWRKEY_PIN;
+
+    // 0. จ่ายไฟเลี้ยงโมเด็ม + กันโมเด็มหลับ (ต้องทำก่อนคุยกับโมเด็ม)
+    pinMode(BOARD_POWERON_PIN, OUTPUT);
+    digitalWrite(BOARD_POWERON_PIN, HIGH);
+    pinMode(MODEM_DTR_PIN, OUTPUT);
+    digitalWrite(MODEM_DTR_PIN, LOW);
+    pinMode(MODEM_RESET_PIN, OUTPUT);
+    digitalWrite(MODEM_RESET_PIN, LOW);
     pinMode(pwrKey, OUTPUT);
+    digitalWrite(pwrKey, LOW);
 
     // เริ่ม Serial ก่อนเพื่อเช็คสถานะ
     _serialAT.begin(MODEM_BAUD, SERIAL_8N1, MODEM_RX_PIN, MODEM_TX_PIN);
@@ -40,13 +49,16 @@ void ModemManager::powerOn() {
         return;
     }
 
-    // 2. ถ้ายังไม่เปิด ค่อยกดปุ่ม PWRKEY (HIGH -> LOW -> HIGH)
-    Serial.println("[Modem] 🔋 กำลังกดปุ่มเปิดชิป 4G...");
-    digitalWrite(pwrKey, HIGH);
-    delay(100);
+    // 2. รีเซ็ตโมเด็ม แล้วกด PWRKEY ตามลำดับทางการของ LilyGO (LOW -> HIGH 1s -> LOW)
+    Serial.println("[Modem] 🔋 กำลังรีเซ็ตและกดปุ่มเปิดชิป 4G...");
+    digitalWrite(MODEM_RESET_PIN, HIGH);
+    delay(2600);
+    digitalWrite(MODEM_RESET_PIN, LOW);
     digitalWrite(pwrKey, LOW);
-    delay(1000);
+    delay(100);
     digitalWrite(pwrKey, HIGH);
+    delay(1000);
+    digitalWrite(pwrKey, LOW);
     
     // 3. รอให้ชิปบูตเสร็จ (delay 1s + timeout 1s = ~2s ต่อรอบ, รวม 10 รอบ = สูงสุด ~20 วินาที)
     Serial.print("[Modem] รอชิป 4G บูต.");
@@ -195,35 +207,35 @@ bool ModemManager::parseGNSSInfo(const String& response, float &lat, float &lon)
         return "";
     };
     
-    String modeStr = getField(response, 0);
-    if (modeStr.length() == 0 || modeStr.toInt() == 0) {
-        return false; // No fix yet
+    // หาช่อง lat ที่ตามด้วย N/S และ lon ที่ตามด้วย E/W
+    // (เฟิร์มแวร์แต่ละรุ่นจำนวนช่องไม่เท่ากัน จึงไม่ fix index)
+    for (int i = 0; i < 20; i++) {
+        String latDir = getField(response, i + 1);
+        String lonDir = getField(response, i + 3);
+        if ((latDir != "N" && latDir != "S") || (lonDir != "E" && lonDir != "W")) continue;
+
+        String latStr = getField(response, i);
+        String lonStr = getField(response, i + 2);
+        if (latStr.length() == 0 || lonStr.length() == 0) return false;
+
+        double latRaw = latStr.toDouble();
+        double lonRaw = lonStr.toDouble();
+        if (latRaw <= 90 && lonRaw <= 180) {
+            // A7670 V1.11 ส่งเป็นองศาทศนิยมอยู่แล้ว (ยืนยันจากบอร์ดจริง)
+            lat = latRaw;
+            lon = lonRaw;
+        } else {
+            // รูปแบบ DDMM.MMMM (เฟิร์มแวร์รุ่นอื่น)
+            int latDeg = (int)(latRaw / 100);
+            int lonDeg = (int)(lonRaw / 100);
+            lat = latDeg + (latRaw - latDeg * 100) / 60.0;
+            lon = lonDeg + (lonRaw - lonDeg * 100) / 60.0;
+        }
+        if (latDir == "S") lat = -lat;
+        if (lonDir == "W") lon = -lon;
+        return true;
     }
-    
-    // fields: [0]mode, [1]GPS, [2]GLONASS, [3]BEIDOU, [4]lat, [5]N/S, [6]lon, [7]E/W, ... [11]speed
-    String latStr = getField(response, 4);
-    String latDir = getField(response, 5);
-    String lonStr = getField(response, 6);
-    String lonDir = getField(response, 7);
-    
-    if (latStr.length() == 0 || lonStr.length() == 0) {
-        return false;
-    }
-    
-    // Convert DDMM.MMMM to decimal degrees
-    float latRaw = latStr.toFloat();
-    int latDeg = (int)(latRaw / 100);
-    float latMin = latRaw - (latDeg * 100);
-    lat = latDeg + (latMin / 60.0f);
-    if (latDir == "S") lat = -lat;
-    
-    float lonRaw = lonStr.toFloat();
-    int lonDeg = (int)(lonRaw / 100);
-    float lonMin = lonRaw - (lonDeg * 100);
-    lon = lonDeg + (lonMin / 60.0f);
-    if (lonDir == "W") lon = -lon;
-    
-    return true;
+    return false; // ยังไม่ fix
 }
 
 String ModemManager::getIMEI() {
